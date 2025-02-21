@@ -15,7 +15,7 @@ import { LuckyPeople } from "../components/LuckyPeople";
 import { LoadingSpinner } from "../components/LoadingSpinner";
 import { useGameGenerator } from "../hooks/useGameGenerator";
 
-const excludedSpeakers = [""];
+const excludedSpeakers = ["SAICHARAN LANKOJI","B Rama Rao","M SADIKH SHARIEFF","Lakshmi Sowmya Parchuri","SAMSON KALETI"];
 const initialEligibleSpeakers = speakers.filter((speaker) => !excludedSpeakers.includes(speaker));
 
 type GameMatch = { team1: string[]; team2: string[] };
@@ -81,7 +81,7 @@ export default function Home() {
   const removePickedSpeaker = useCallback((speaker: string) => {
     setPickedSpeakers((prev) => prev.filter((s) => s !== speaker));
     setEligibleSpeakers((prev) => [...prev, speaker]);
-    toast.success(`${speaker} is back in the pool!`);
+    toast.success(`${speaker} is back in the pool!`,  {style: { background: "linear-gradient(to right, #ff8a00, #ff5f00)", color: "white" }});
   }, []);
 
   const resetAll = useCallback(() => {
@@ -93,7 +93,7 @@ export default function Home() {
       carrom: { matches: [], luckyPeople: [], usedPlayers: new Set(), isGenerating: false, gameMode: "2v2" },
       badminton: { matches: [], luckyPeople: [], usedPlayers: new Set(), isGenerating: false, gameMode: "2v2" },
     });
-    toast.success("All matches reset!");
+    toast.success("All matches reset!", {style: { background: "linear-gradient(to right, #ff8a00, #ff5f00)", color: "white" }});
   }, []);
 
   const downloadAsPDF = useCallback(() => {
@@ -329,28 +329,36 @@ export default function Home() {
     <div className="flex flex-col sm:flex-row justify-between gap-4 items-center">
       <div className="flex items-center gap-4">
         <span className="text-sm sm:text-base font-medium text-orange-700 dark:text-orange-300">Game Mode:</span>
-        {game === "chess" ? (
-          <span className="text-sm sm:text-base text-orange-600 dark:text-orange-300">1v1</span>
-        ) : (
-          <div className="flex rounded-lg overflow-hidden border border-orange-200 dark:border-orange-800">
-            <Button
-              variant={gameStates[game].gameMode === "1v1" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setGameState(game, { gameMode: "1v1", matches: [], luckyPeople: [], usedPlayers: new Set() })}
-              className={`rounded-none ${gameStates[game].gameMode === "1v1" ? "bg-orange-500 text-white hover:bg-orange-600" : "hover:bg-orange-100 dark:hover:bg-orange-900/30"}`}
-            >
-              1v1
-            </Button>
-            <Button
-              variant={gameStates[game].gameMode === "2v2" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setGameState(game, { gameMode: "2v2", matches: [], luckyPeople: [], usedPlayers: new Set() })}
-              className={`rounded-none ${gameStates[game].gameMode === "2v2" ? "bg-orange-500 text-white hover:bg-orange-600" : "hover:bg-orange-100 dark:hover:bg-orange-900/30"}`}
-            >
-              2v2
-            </Button>
-          </div>
-        )}
+        <div className="flex rounded-lg overflow-hidden border border-orange-200 dark:border-orange-800">
+          <Button
+            variant={gameStates[game].gameMode === "1v1" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setGameState(game, { gameMode: "1v1", matches: [], luckyPeople: [], usedPlayers: new Set() })}
+            className={`rounded-none ${gameStates[game].gameMode === "1v1" ? "bg-orange-500 text-white hover:bg-orange-600" : "hover:bg-orange-100 dark:hover:bg-orange-900/30"}`}
+          >
+            1v1
+          </Button>
+          <Button
+            variant={gameStates[game].gameMode === "2v2" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => {
+              if (game === "chess") {
+                toast.error("Chess is a 1v1 game!", {
+                  style: { background: "linear-gradient(to right, #ff8a00, #ff5f00)", color: "white" },
+                });
+              } else {
+                setGameState(game, { gameMode: "2v2", matches: [], luckyPeople: [], usedPlayers: new Set() });
+              }
+            }}
+            className={`rounded-none ${
+              gameStates[game].gameMode === "2v2"
+                ? "bg-orange-500 text-white hover:bg-orange-600"
+                : "hover:bg-orange-100 dark:hover:bg-orange-900/30"
+            } ${game === "chess" ? "opacity-50 cursor-not-allowed" : ""}`}
+          >
+            2v2
+          </Button>
+        </div>
       </div>
       <Button
         onClick={() => generatePairs()}
@@ -374,8 +382,7 @@ export default function Home() {
       </div>
     )}
   </TabsContent>
-))}
-              </Tabs>
+))}     </Tabs>
 
               <GameMatches game={selectedGame} matches={gameStates[selectedGame]?.matches || []} />
               <LuckyPeople luckyPeople={selectedGame === "general" ? generalLuckyPeople : gameStates[selectedGame].luckyPeople} />
