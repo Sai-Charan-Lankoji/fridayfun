@@ -1,384 +1,167 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { Sparkles, Users, PartyPopper, RefreshCcw, UserPlus, Users2, Swords, Target, Gamepad2 } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { toast } from "sonner"
-import { speakers, chessPlayers, carromPlayers, badmintonPlayers } from "./players"
-import { motion, AnimatePresence } from "framer-motion"
+import { useState, useCallback } from "react";
+import { Sparkles, Users, PartyPopper, RefreshCcw, UserPlus, Download, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { toast } from "sonner";
+import { jsPDF } from "jspdf";
+import { speakers,chessPlayers, carromPlayers, badmintonPlayers } from "./players";
+import { SlotMachine } from "../components/SlotMachine";
+import { GameMatches } from "../components/GameMatches";
+import { LuckyPeople } from "../components/LuckyPeople";
+import { LoadingSpinner } from "../components/LoadingSpinner";
+import { useGameGenerator } from "../hooks/useGameGenerator";
 
-const excludedSpeakers = [""]
-const eligibleSpeakers = speakers.filter((speaker) => !excludedSpeakers.includes(speaker))
+const excludedSpeakers = [""];
+const initialEligibleSpeakers = speakers.filter((speaker) => !excludedSpeakers.includes(speaker));
 
-type GameMatch = {
-  team1: string[]
-  team2: string[]
-}
-
-type GameMode = "1v1" | "2v2"
-
-type GameState = {
-  matches: GameMatch[]
-  luckyPeople: string[]
-  usedPlayers: Set<string>
-  isGenerating: boolean
-  gameMode: GameMode
-}
-
-function shuffleArray(array: string[]) {
-  const shuffled = [...array]
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
-  }
-  return shuffled
-}
-
-function getPlayersForGame(game: string): string[] {
-  switch (game) {
-    case "chess":
-      return shuffleArray([...chessPlayers]) // 1v1
-    case "carrom":
-    case "badminton":
-      // Ensure even number of players for 2v2 games
-      const players = game === "carrom" ? [...carromPlayers] : [...badmintonPlayers]
-      return shuffleArray(players)
-    default:
-      return shuffleArray([...eligibleSpeakers])
-  }
-}
+type GameMatch = { team1: string[]; team2: string[] };
+type GameMode = "1v1" | "2v2";
+type GameState = { matches: GameMatch[]; luckyPeople: string[]; usedPlayers: Set<string>; isGenerating: boolean; gameMode: GameMode };
 
 export default function Home() {
-  const [selectedSpeaker, setSelectedSpeaker] = useState("")
-  const [isSpinning, setIsSpinning] = useState(false)
-  const [pairSize, setPairSize] = useState(2)
-  const [pairs, setPairs] = useState<string[][]>([])
-  const [generalLuckyPeople, setGeneralLuckyPeople] = useState<string[]>([])
-  const [generalUsedPlayers, setGeneralUsedPlayers] = useState<Set<string>>(new Set())
-  const [selectedGame, setSelectedGame] = useState("general")
-  const [isGeneralGenerating, setIsGeneralGenerating] = useState(false)
+  
+  const [selectedSpeaker, setSelectedSpeaker] = useState("");
+  const [isSpinning, setIsSpinning] = useState(false);
+  const [pickedSpeakers, setPickedSpeakers] = useState<string[]>([]);
+  const [eligibleSpeakers, setEligibleSpeakers] = useState<string[]>(initialEligibleSpeakers);
+  const [pairSize, setPairSize] = useState<number | null>(2);
+  const [pairs, setPairs] = useState<string[][]>([]);
+  const [generalLuckyPeople, setGeneralLuckyPeople] = useState<string[]>([]);
+  const [generalUsedPlayers, setGeneralUsedPlayers] = useState<Set<string>>(new Set());
+  const [selectedGame, setSelectedGame] = useState("general");
+  const [isGeneralGenerating, setIsGeneralGenerating] = useState(false);
+  const [activeTab, setActiveTab] = useState("speaker");
 
   const [gameStates, setGameStates] = useState<Record<string, GameState>>({
     chess: { matches: [], luckyPeople: [], usedPlayers: new Set(), isGenerating: false, gameMode: "1v1" },
     carrom: { matches: [], luckyPeople: [], usedPlayers: new Set(), isGenerating: false, gameMode: "2v2" },
     badminton: { matches: [], luckyPeople: [], usedPlayers: new Set(), isGenerating: false, gameMode: "2v2" },
-  })
+  });
 
-  const [isRolling, setIsRolling] = useState(false)
-  const [rollingNames, setRollingNames] = useState<string[]>([])
+  const setGameState = useCallback((game: string, newState: Partial<GameState>) => {
+    setGameStates((prev) => ({ ...prev, [game]: { ...prev[game], ...newState } }));
+  }, []);
 
-  const setGameState = (game: string, newState: Partial<GameState>) => {
-    setGameStates((prev) => ({
-      ...prev,
-      [game]: {
-        ...prev[game],
-        ...newState,
-      },
-    }))
-  }
+  const { generatePairs } = useGameGenerator(
+    selectedGame,
+    gameStates,
+    setGameState,
+    pairSize,
+    setPairs,
+    setGeneralLuckyPeople,
+    setGeneralUsedPlayers,
+    setIsGeneralGenerating
+  );
 
-  const generateGameMatches = (game: string, availablePlayers: string[]) => {
-    const matches: GameMatch[] = []
-    const used = new Set<string>()
-    const players = [...availablePlayers]
-
-    const gameMode = gameStates[game].gameMode
-    const playersPerMatch = gameMode === "2v2" ? 4 : 2
-
-    while (players.length >= playersPerMatch) {
-      if (gameMode === "2v2") {
-        // Handle 2v2 matches
-        const team1 = [players.shift(), players.shift()].filter(Boolean) as string[]
-        const team2 = [players.shift(), players.shift()].filter(Boolean) as string[]
-
-        if (team1.length === 2 && team2.length === 2) {
-          matches.push({ team1, team2 })
-          team1.forEach((p) => used.add(p))
-          team2.forEach((p) => used.add(p))
-        } else {
-          // Add remaining players back to be handled as lucky players
-          ;[...team1, ...team2].forEach((p) => players.push(p))
-          break
-        }
-      } else {
-        // Handle 1v1 matches
-        const player1 = players.shift()
-        const player2 = players.shift()
-
-        if (player1 && player2) {
-          matches.push({
-            team1: [player1],
-            team2: [player2],
-          })
-          used.add(player1)
-          used.add(player2)
-        }
-      }
+  const pickRandomSpeaker = useCallback(() => {
+    if (eligibleSpeakers.length === 0) {
+      toast.error("No more eligible speakers available!");
+      return;
     }
-
-    return { matches, luckyPeople: players, usedPlayers: used }
-  }
-
-  const generatePairs = (game = "general") => {
-    if (game === "general") {
-      setIsGeneralGenerating(true)
-      setPairs([])
-      setGeneralLuckyPeople([])
-      setGeneralUsedPlayers(new Set())
-    } else {
-      setGameState(game, { isGenerating: true })
-    }
-
+    setIsSpinning(true);
+    setSelectedSpeaker("");
     setTimeout(() => {
-      const availablePlayers = getPlayersForGame(game)
+      const winnerIndex = Math.floor(Math.random() * eligibleSpeakers.length);
+      const winner = eligibleSpeakers[winnerIndex];
+      setSelectedSpeaker(winner);
+      setPickedSpeakers((prev) => [...prev, winner]);
+      setEligibleSpeakers((prev) => prev.filter((_, i) => i !== winnerIndex));
+      setIsSpinning(false);
+      toast.success("🎯 Speaker selected!", {
+        description: `${winner} is ready to shine! ✨`,
+        style: { background: "linear-gradient(to right, #ff8a00, #ff5f00)", color: "white" },
+      });
+    }, 2000);
+  }, [eligibleSpeakers]);
 
-      if (game === "general") {
-        const newPairs: string[][] = []
-        const used = new Set<string>()
-        const remaining: string[] = []
+  const removePickedSpeaker = useCallback((speaker: string) => {
+    setPickedSpeakers((prev) => prev.filter((s) => s !== speaker));
+    setEligibleSpeakers((prev) => [...prev, speaker]);
+    toast.success(`${speaker} is back in the pool!`);
+  }, []);
 
-        for (let i = 0; i < availablePlayers.length; i++) {
-          if (!used.has(availablePlayers[i])) {
-            const currentGroup: string[] = [availablePlayers[i]]
-            used.add(availablePlayers[i])
+  const resetAll = useCallback(() => {
+    setPairs([]);
+    setGeneralLuckyPeople([]);
+    setGeneralUsedPlayers(new Set());
+    setGameStates({
+      chess: { matches: [], luckyPeople: [], usedPlayers: new Set(), isGenerating: false, gameMode: "1v1" },
+      carrom: { matches: [], luckyPeople: [], usedPlayers: new Set(), isGenerating: false, gameMode: "2v2" },
+      badminton: { matches: [], luckyPeople: [], usedPlayers: new Set(), isGenerating: false, gameMode: "2v2" },
+    });
+    toast.success("All matches reset!");
+  }, []);
 
-            let filled = 1
-            for (let j = i + 1; j < availablePlayers.length && filled < pairSize; j++) {
-              if (!used.has(availablePlayers[j])) {
-                currentGroup.push(availablePlayers[j])
-                used.add(availablePlayers[j])
-                filled++
-              }
-            }
+  const downloadAsPDF = useCallback(() => {
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text(`${selectedGame.charAt(0).toUpperCase() + selectedGame.slice(1)} Matches`, 10, 10);
 
-            if (currentGroup.length === pairSize) {
-              newPairs.push(currentGroup)
-            } else {
-              remaining.push(...currentGroup)
-            }
-          }
-        }
-
-        setPairs(newPairs)
-        setGeneralLuckyPeople(remaining)
-        setGeneralUsedPlayers(used)
-        setIsGeneralGenerating(false)
-      } else {
-        const result = generateGameMatches(game, availablePlayers)
-        setGameState(game, {
-          matches: result.matches,
-          luckyPeople: result.luckyPeople,
-          usedPlayers: result.usedPlayers,
-          isGenerating: false,
-        })
+    let y = 20;
+    if (selectedGame === "general") {
+      pairs.forEach((pair, index) => {
+        doc.text(`Group ${index + 1}:`, 10, y);
+        y += 10;
+        pair.forEach((person) => {
+          doc.text(`- ${person}`, 20, y);
+          y += 10;
+        });
+      });
+      if (generalLuckyPeople.length) {
+        y += 10;
+        doc.text("Lucky People (Next Round):", 10, y);
+        y += 10;
+        generalLuckyPeople.forEach((person) => {
+          doc.text(`- ${person}`, 20, y);
+          y += 10;
+        });
       }
-
-      const luckyCount = game === "general" ? generalLuckyPeople.length : gameStates[game].luckyPeople.length
-
-      toast.success(`🎮 ${game.charAt(0).toUpperCase() + game.slice(1)} matches generated!`, {
-        description: luckyCount ? "Some players get a break this round! 🌟" : "Perfect matching achieved! ✨",
-        style: {
-          background: "linear-gradient(to right, #ff8a00, #ff5f00)",
-          color: "white",
-        },
-      })
-    }, 1000)
-  }
-
-  const GameIcon = ({ game }: { game: string }) => {
-    switch (game) {
-      case "chess":
-        return <Swords className="w-6 h-6" />
-      case "carrom":
-        return <Target className="w-6 h-6" />
-      case "badminton":
-        return <Gamepad2 className="w-6 h-6" />
-      default:
-        return <Users2 className="w-6 h-6" />
+    } else {
+      gameStates[selectedGame].matches.forEach((match, index) => {
+        doc.text(`Match ${index + 1}:`, 10, y);
+        y += 10;
+        doc.text(`Team 1: ${match.team1.join(", ")}`, 20, y);
+        y += 10;
+        doc.text(`Team 2: ${match.team2.join(", ")}`, 20, y);
+        y += 10;
+      });
+      if (gameStates[selectedGame].luckyPeople.length) {
+        y += 10;
+        doc.text("Lucky People (Next Round):", 10, y);
+        y += 10;
+        gameStates[selectedGame].luckyPeople.forEach((person) => {
+          doc.text(`- ${person}`, 20, y);
+          y += 10;
+        });
+      }
     }
-  }
 
-  const renderGameMatches = () => {
-    if (selectedGame === "general" || !gameStates[selectedGame].matches.length) return null
+    doc.save(`${selectedGame}-matches.pdf`);
+  }, [selectedGame, pairs, generalLuckyPeople, gameStates]);
 
-    const currentGame = selectedGame
-    const { matches } = gameStates[currentGame]
-
-    return (
-      <div className="mt-8 space-y-6">
-        <h3 className="text-xl font-semibold text-orange-700 dark:text-orange-300 flex items-center gap-2">
-          <GameIcon game={currentGame} />
-          {currentGame.charAt(0).toUpperCase() + currentGame.slice(1)} Matches
-        </h3>
-        <motion.div
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
-          initial="hidden"
-          animate="visible"
-          variants={{
-            visible: {
-              transition: { staggerChildren: 0.1 },
-            },
-          }}
-        >
-          {matches.map((match, index) => (
-            <motion.div
-              key={index}
-              variants={{
-                hidden: { opacity: 0, y: 20 },
-                visible: { opacity: 1, y: 0 },
-              }}
-              className="p-4 sm:p-6 bg-gradient-to-br from-orange-100 to-amber-50 dark:from-orange-900/50 dark:to-amber-900/30 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105"
-            >
-              <div className="space-y-4">
-                <div className="flex items-center justify-between text-orange-800 dark:text-orange-200">
-                  <span className="text-sm sm:text-base font-semibold">Match {index + 1}</span>
-                  <GameIcon game={currentGame} />
-                </div>
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex-1 bg-white/50 dark:bg-black/20 p-3 rounded-md space-y-2">
-                    {match.team1.map((player, pIndex) => (
-                      <div key={pIndex} className="text-sm sm:text-base text-orange-600 dark:text-orange-300 p-1">
-                        {player}
-                      </div>
-                    ))}
-                  </div>
-                  <div className="text-orange-600 dark:text-orange-400 font-bold px-2">VS</div>
-                  <div className="flex-1 bg-white/50 dark:bg-black/20 p-3 rounded-md space-y-2">
-                    {match.team2.map((player, pIndex) => (
-                      <div key={pIndex} className="text-sm sm:text-base text-orange-600 dark:text-orange-300 p-1">
-                        {player}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          ))}
-        </motion.div>
-      </div>
-    )
-  }
-
-  const renderLuckyPeople = () => {
-    const luckyPeople = selectedGame === "general" ? generalLuckyPeople : gameStates[selectedGame].luckyPeople
-
-    if (!luckyPeople.length) return null
-
-    return (
-      <div className="mt-8 animate-fadeIn">
-        <h3 className="text-xl font-semibold text-orange-700 dark:text-orange-300 mb-4 flex items-center gap-2">
-          <Sparkles className="w-6 h-6" />
-          Lucky People (Next Round)
-        </h3>
-        <motion.div
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
-          initial="hidden"
-          animate="visible"
-          variants={{
-            visible: {
-              transition: { staggerChildren: 0.05, delayChildren: 0.2 },
-            },
-          }}
-        >
-          {luckyPeople.map((person, index) => (
-            <motion.div
-              key={index}
-              variants={{
-                hidden: { opacity: 0, x: -20 },
-                visible: { opacity: 1, x: 0 },
-              }}
-              className="p-4 bg-gradient-to-r from-orange-200 to-amber-100 dark:from-orange-800/50 dark:to-amber-700/30 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105"
-            >
-              <div className="text-orange-600 dark:text-orange-300 font-medium">{person}</div>
-            </motion.div>
-          ))}
-        </motion.div>
-      </div>
-    )
-  }
-
-  const LoadingSpinner = () => (
-    <motion.div
-      animate={{ rotate: 360 }}
-      transition={{ duration: 1, repeat: Number.POSITIVE_INFINITY, ease: "linear" }}
-      className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full"
-    />
-  )
-
-  const SlotMachine = ({ isSpinning, finalName }: { isSpinning: boolean; finalName: string }) => {
-    const [displayedName, setDisplayedName] = useState<string>("");
-  
-    useEffect(() => {
-      if (isSpinning) {
-        const interval = setInterval(() => {
-          const randomName = eligibleSpeakers[Math.floor(Math.random() * eligibleSpeakers.length)];
-          setDisplayedName(randomName);
-        }, 100); // Update every 100ms for smooth rolling
-  
-        return () => clearInterval(interval);
-      } else {
-        setDisplayedName(finalName); // Set final name when spinning stops
-      }
-    }, [isSpinning, finalName]);
-  
-    return (
-      <div className="relative h-20 w-full max-w-md mx-auto overflow-hidden rounded-lg bg-orange-100/20 dark:bg-orange-900/20 border border-orange-300 dark:border-orange-700">
-        <motion.div
-          className="absolute inset-0 flex items-center justify-center"
-          animate={isSpinning ? { y: [0, -20, 0] } : { y: 0 }}
-          transition={isSpinning ? { repeat: Infinity, duration: 0.3, ease: "linear" } : { duration: 0.5 }}
-        >
-          <div className="text-xl sm:text-2xl lg:text-3xl font-medium text-orange-600 dark:text-orange-300 text-center px-4">
-            {displayedName || "Spin to pick a speaker!"}
-          </div>
-        </motion.div>
-      </div>
-    );
+  const getParticipantCount = () => {
+    if (activeTab === "speaker") return speakers.length;
+    switch (selectedGame) {
+      case "chess":
+        return chessPlayers.length;
+      case "carrom":
+        return carromPlayers.length;
+      case "badminton":
+        return badmintonPlayers.length;
+      case "general":
+      default:
+        return speakers.length;
+    }
   };
 
-  
-
-  const pickRandomSpeaker = () => {
-    setIsSpinning(true)
-    setSelectedSpeaker("")
-
-    // Roll for 2 seconds then show the winner
-    setTimeout(() => {
-      const winner = eligibleSpeakers[Math.floor(Math.random() * eligibleSpeakers.length)]
-      setSelectedSpeaker(winner)
-      setIsSpinning(false)
-
-      toast.success("🎯 Speaker selected!", {
-        description: "Time to shine! ✨",
-        style: {
-          background: "linear-gradient(to right, #ff8a00, #ff5f00)",
-          color: "white",
-        },
-      })
-    }, 2000)
-  }
-
-  const toggleGameMode = (game: string) => {
-    setGameStates((prev) => ({
-      ...prev,
-      [game]: {
-        ...prev[game],
-        gameMode: prev[game].gameMode === "1v1" ? "2v2" : "1v1",
-        matches: [], // Clear existing matches when mode changes
-        luckyPeople: [],
-        usedPlayers: new Set(),
-      },
-    }))
-  }
-
-  const isCurrentGameGenerating =
-    selectedGame === "general" ? isGeneralGenerating : gameStates[selectedGame].isGenerating
+  const isCurrentGameGenerating = selectedGame === "general" ? isGeneralGenerating : gameStates[selectedGame].isGenerating;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 to-amber-100 dark:from-orange-950 dark:to-amber-900 px-4 sm:px-6 lg:px-8 overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 to-amber-100 dark:from-orange-950 dark:to-amber-900 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto py-4 sm:py-6 lg:py-8">
         <div className="text-center mb-12">
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-orange-600 dark:text-orange-400 mb-4 flex items-center justify-center gap-2">
@@ -388,20 +171,14 @@ export default function Home() {
           </h1>
         </div>
 
-        <Tabs defaultValue="speaker" className="space-y-6">
+        <Tabs defaultValue="speaker" onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="w-full max-w-md mx-auto bg-orange-100 dark:bg-orange-900/30 p-1 rounded-xl overflow-x-auto flex-nowrap">
-            <TabsTrigger
-              value="speaker"
-              className="w-1/2 data-[state=active]:bg-orange-500 data-[state=active]:text-white dark:data-[state=active]:bg-orange-600 transition-all duration-300 hover:bg-orange-200 dark:hover:bg-orange-800/50"
-            >
+            <TabsTrigger value="speaker" className="w-1/2 data-[state=active]:bg-orange-500 data-[state=active]:text-white">
               <Users className="w-5 h-5 mr-2" />
               Friday Speaker
             </TabsTrigger>
-            <TabsTrigger
-              value="pairs"
-              className="w-1/2 data-[state=active]:bg-orange-500 data-[state=active]:text-white dark:data-[state=active]:bg-orange-600 transition-all duration-300 hover:bg-orange-200 dark:hover:bg-orange-800/50"
-            >
-              <Users2 className="w-5 h-5 mr-2" />
+            <TabsTrigger value="pairs" className="w-1/2 data-[state=active]:bg-orange-500 data-[state=active]:text-white">
+              <UserPlus className="w-5 h-5 mr-2" />
               Game Matches
             </TabsTrigger>
           </TabsList>
@@ -410,42 +187,47 @@ export default function Home() {
             <Card className="p-4 sm:p-6 lg:p-8 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm shadow-xl border-2 border-orange-200 dark:border-orange-800">
               <div className="flex items-center gap-2 mb-6">
                 <Users className="h-6 w-6 text-orange-500 dark:text-orange-400" />
-                <h2 className="text-xl sm:text-2xl font-semibold text-orange-800 dark:text-orange-200">
+                <h2 className="text-lg sm:text-xl lg:text-2xl font-semibold text-orange-800 dark:text-orange-200">
                   Today's Lucky Speaker
                 </h2>
               </div>
-              <div className="min-h-[120px] flex items-center justify-center">
-                <AnimatePresence mode="wait">
-                  {selectedSpeaker ? (
-                    <SlotMachine isSpinning={isSpinning} finalName={selectedSpeaker} />
-                  ) : (
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="text-2xl font-medium text-orange-600/60 dark:text-orange-300/60"
-                    >
-                      Click the button to pick a speaker!
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
+              <SlotMachine isSpinning={isSpinning} finalName={selectedSpeaker} allSpeakers={speakers} />
+              {pickedSpeakers.length > 0 && (
+                <div className="mt-6">
+                  <h3 className="text-sm sm:text-base lg:text-lg font-semibold text-orange-700 dark:text-orange-300 mb-2">
+                    Previously Picked Speakers:
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                    {pickedSpeakers.map((speaker) => (
+                      <div
+                        key={speaker}
+                        className="flex items-center justify-between p-2 bg-orange-100 dark:bg-orange-900/30 rounded-lg"
+                      >
+                        <span className="text-sm sm:text-base text-orange-600 dark:text-orange-300">{speaker}</span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removePickedSpeaker(speaker)}
+                          className="text-orange-500 hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300"
+                          aria-label={`Remove ${speaker} from picked list`}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </Card>
-
             <div className="mt-8 text-center">
               <Button
                 size="lg"
                 onClick={pickRandomSpeaker}
-                disabled={isSpinning}
-                className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-semibold py-8 px-12 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 text-lg disabled:opacity-70"
+                disabled={isSpinning || eligibleSpeakers.length === 0}
+                className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-semibold py-6 px-8 sm:px-12 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 text-sm sm:text-base disabled:opacity-70"
+                aria-label="Pick today's speaker"
               >
-                {isSpinning ? (
-                  <LoadingSpinner />
-                ) : (
-                  <>
-                    <RefreshCcw className="mr-3 h-6 w-6" />
-                    Pick Today's Speaker!
-                  </>
-                )}
+                {isSpinning ? <LoadingSpinner /> : <><RefreshCcw className="mr-3 h-5 w-5" /> Pick Today's Speaker!</>}
               </Button>
             </div>
           </TabsContent>
@@ -454,195 +236,176 @@ export default function Home() {
             <Card className="p-4 sm:p-6 lg:p-8 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm shadow-xl border-2 border-orange-200 dark:border-orange-800">
               <div className="flex items-center gap-2 mb-6">
                 <UserPlus className="h-6 w-6 text-orange-500 dark:text-orange-400" />
-                <h2 className="text-xl sm:text-2xl font-semibold text-orange-800 dark:text-orange-200">
+                <h2 className="text-lg sm:text-xl lg:text-2xl font-semibold text-orange-800 dark:text-orange-200">
                   Game Matches Generator
                 </h2>
               </div>
 
-              <div className="space-y-6">
-                <Tabs value={selectedGame} onValueChange={setSelectedGame} className="w-full">
-                  <TabsList className="w-full bg-orange-100/50 dark:bg-orange-900/20 p-1 rounded-lg grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    <TabsTrigger
-                      value="general"
-                      className="data-[state=active]:bg-orange-500 data-[state=active]:text-white"
-                    >
-                      <Users2 className="w-4 h-4 mr-2" />
-                      General
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value="chess"
-                      className="data-[state=active]:bg-orange-500 data-[state=active]:text-white"
-                    >
-                      <Swords className="w-4 h-4 mr-2" />
-                      Chess
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value="carrom"
-                      className="data-[state=active]:bg-orange-500 data-[state=active]:text-white"
-                    >
-                      <Target className="w-4 h-4 mr-2" />
-                      Carrom
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value="badminton"
-                      className="data-[state=active]:bg-orange-500 data-[state=active]:text-white"
-                    >
-                      <Gamepad2 className="w-4 h-4 mr-2" />
-                      Badminton
-                    </TabsTrigger>
-                  </TabsList>
+              <Tabs value={selectedGame} onValueChange={setSelectedGame} className="w-full">
+                <TabsList className="w-full bg-orange-100/50 dark:bg-orange-900/20 p-1 rounded-lg grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <TabsTrigger value="general" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white">
+                    <UserPlus className="w-4 h-4 mr-2" /> General
+                  </TabsTrigger>
+                  <TabsTrigger value="chess" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white">
+                    <RefreshCcw className="w-4 h-4 mr-2" /> Chess
+                  </TabsTrigger>
+                  <TabsTrigger value="carrom" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white">
+                    <RefreshCcw className="w-4 h-4 mr-2" /> Carrom
+                  </TabsTrigger>
+                  <TabsTrigger value="badminton" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white">
+                    <RefreshCcw className="w-4 h-4 mr-2" /> Badminton
+                  </TabsTrigger>
+                </TabsList>
 
-                  <TabsContent value="general" className="mt-6">
-                    <div className="flex items-center gap-4">
-                      <div className="flex-1">
-                        <label className="block text-sm font-medium text-orange-700 dark:text-orange-300 mb-2">
-                          People per group:
-                        </label>
-                        <Input
-                          type="number"
-                          min="2"
-                          value={pairSize}
-                          onChange={(e) => {
-                            const value = e.target.value
-                            if (value === "") {
-                              setPairSize(2)
-                            } else {
-                              const num = Number.parseInt(value)
-                              if (!isNaN(num)) {
-                                setPairSize(Math.max(2, num))
-                              }
-                            }
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Backspace") {
-                              setPairSize(2)
-                            }
-                          }}
-                          className="border-orange-200 dark:border-orange-800"
-                        />
-                      </div>
-                      <Button
-                        onClick={() => generatePairs("general")}
-                        disabled={isGeneralGenerating}
-                        className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 h-[42px]"
-                      >
-                        <RefreshCcw className={`mr-2 h-5 w-5 ${isGeneralGenerating ? "animate-spin" : ""}`} />
-                        Generate Groups
-                      </Button>
+                <TabsContent value="general" className="mt-6">
+                  <div className="flex flex-col sm:flex-row items-center gap-4">
+                    <div className="flex-1 w-full sm:w-auto">
+                      <label className="block text-sm sm:text-base font-medium text-orange-700 dark:text-orange-300 mb-2">
+                        People per group:
+                      </label>
+                      <Input
+                        type="number"
+                        min="2"
+                        value={pairSize === null ? "" : pairSize}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          if (value === "") setPairSize(null);
+                          else {
+                            const num = Number.parseInt(value);
+                            if (!isNaN(num) && num >= 2) setPairSize(num);
+                          }
+                        }}
+                        onBlur={() => { if (pairSize === null || pairSize < 2) setPairSize(2); }}
+                        className="border-orange-200 dark:border-orange-800 text-sm sm:text-base"
+                      />
                     </div>
-                  </TabsContent>
-
-                  {["carrom", "badminton"].map((game) => (
-                    <TabsContent key={game} value={game} className="mt-6">
-                      <div className="flex flex-col sm:flex-row justify-between gap-4 items-center">
-                        <div className="flex items-center gap-4">
-                          <span className="text-sm font-medium text-orange-700 dark:text-orange-300">Game Mode:</span>
-                          <div className="flex rounded-lg overflow-hidden border border-orange-200 dark:border-orange-800">
-                            <Button
-                              variant={gameStates[game].gameMode === "1v1" ? "default" : "ghost"}
-                              size="sm"
-                              onClick={() => setGameState(game, { gameMode: "1v1", matches: [] })}
-                              className={`rounded-none ${
-                                gameStates[game].gameMode === "1v1"
-                                  ? "bg-orange-500 text-white hover:bg-orange-600"
-                                  : "hover:bg-orange-100 dark:hover:bg-orange-900/30"
-                              }`}
-                            >
-                              1v1
-                            </Button>
-                            <Button
-                              variant={gameStates[game].gameMode === "2v2" ? "default" : "ghost"}
-                              size="sm"
-                              onClick={() => setGameState(game, { gameMode: "2v2", matches: [] })}
-                              className={`rounded-none ${
-                                gameStates[game].gameMode === "2v2"
-                                  ? "bg-orange-500 text-white hover:bg-orange-600"
-                                  : "hover:bg-orange-100 dark:hover:bg-orange-900/30"
-                              }`}
-                            >
-                              2v2
-                            </Button>
-                          </div>
-                        </div>
+                    <Button
+                      onClick={() => generatePairs()}
+                      disabled={isGeneralGenerating}
+                      className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 h-[42px] text-sm sm:text-base"
+                      aria-label="Generate general groups"
+                    >
+                      <RefreshCcw className={`mr-2 h-5 w-5 ${isGeneralGenerating ? "animate-spin" : ""}`} />
+                      Generate Groups
+                    </Button>
+                  </div>
+                  {pairs.length > 0 && (
+                    <div className="mt-6 space-y-6">
+                      <div className="flex justify-between items-center">
+                        <h3 className="text-lg sm:text-xl lg:text-2xl font-semibold text-orange-700 dark:text-orange-300">Generated Groups:</h3>
                         <Button
-                          onClick={() => generatePairs(game)}
-                          disabled={gameStates[game].isGenerating}
-                          className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600"
+                          onClick={downloadAsPDF}
+                          className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-sm sm:text-base"
+                          aria-label="Download groups as PDF"
                         >
-                          <RefreshCcw
-                            className={`mr-2 h-5 w-5 ${gameStates[game].isGenerating ? "animate-spin" : ""}`}
-                          />
-                          Generate {game.charAt(0).toUpperCase() + game.slice(1)} Matches
+                          <Download className="mr-2 h-5 w-5" /> Download PDF
                         </Button>
                       </div>
-                    </TabsContent>
-                  ))}
-
-                  <TabsContent key="chess" value="chess" className="mt-6">
-                    <div className="flex justify-end">
-                      <Button
-                        onClick={() => generatePairs("chess")}
-                        disabled={gameStates["chess"].isGenerating}
-                        className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600"
-                      >
-                        <RefreshCcw
-                          className={`mr-2 h-5 w-5 ${gameStates["chess"].isGenerating ? "animate-spin" : ""}`}
-                        />
-                        Generate Chess Matches
-                      </Button>
-                    </div>
-                  </TabsContent>
-                </Tabs>
-
-                {selectedGame === "general" && pairs.length > 0 && (
-                  <div className="space-y-6">
-                    <h3 className="text-xl font-semibold text-orange-700 dark:text-orange-300">Generated Groups:</h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {pairs.map((pair, index) => (
-                        <div
-                          key={index}
-                          className="group p-4 bg-gradient-to-br from-orange-100 to-amber-50 dark:from-orange-900/50 dark:to-amber-900/30 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105 animate-fadeIn"
-                          style={{
-                            animationDelay: `${index * 100}ms`,
-                          }}
-                        >
-                          <div className="font-medium text-orange-800 dark:text-orange-200 flex items-center gap-2 mb-3">
-                            <Users2 className="w-5 h-5" />
-                            <span>Group {index + 1}</span>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {pairs.map((pair, index) => (
+                          <div
+                            key={index}
+                            className="p-4 bg-gradient-to-br from-orange-100 to-amber-50 dark:from-orange-900/50 dark:to-amber-900/30 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105"
+                          >
+                            <div className="font-medium text-orange-800 dark:text-orange-200 flex items-center gap-2 mb-3">
+                              <UserPlus className="w-5 h-5" /> Group {index + 1}
+                            </div>
+                            <div className="space-y-2">
+                              {pair.map((person, pIndex) => (
+                                <div key={pIndex} className="text-sm sm:text-base text-orange-600 dark:text-orange-300 bg-white/50 dark:bg-black/20 p-2 rounded-md">
+                                  {person}
+                                </div>
+                              ))}
+                            </div>
                           </div>
-                          <div className="space-y-2">
-                            {pair.map((person, pIndex) => (
-                              <div
-                                key={pIndex}
-                                className="text-orange-600 dark:text-orange-300 bg-white/50 dark:bg-black/20 p-2 rounded-md group-hover:translate-x-1 transition-transform"
-                                style={{
-                                  transitionDelay: `${pIndex * 50}ms`,
-                                }}
-                              >
-                                {person}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
+                </TabsContent>
 
-                {renderGameMatches()}
-                {renderLuckyPeople()}
+                {["chess", "carrom", "badminton"].map((game) => (
+  <TabsContent key={game} value={game} className="mt-6">
+    <div className="flex flex-col sm:flex-row justify-between gap-4 items-center">
+      <div className="flex items-center gap-4">
+        <span className="text-sm sm:text-base font-medium text-orange-700 dark:text-orange-300">Game Mode:</span>
+        {game === "chess" ? (
+          <span className="text-sm sm:text-base text-orange-600 dark:text-orange-300">1v1</span>
+        ) : (
+          <div className="flex rounded-lg overflow-hidden border border-orange-200 dark:border-orange-800">
+            <Button
+              variant={gameStates[game].gameMode === "1v1" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setGameState(game, { gameMode: "1v1", matches: [], luckyPeople: [], usedPlayers: new Set() })}
+              className={`rounded-none ${gameStates[game].gameMode === "1v1" ? "bg-orange-500 text-white hover:bg-orange-600" : "hover:bg-orange-100 dark:hover:bg-orange-900/30"}`}
+            >
+              1v1
+            </Button>
+            <Button
+              variant={gameStates[game].gameMode === "2v2" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setGameState(game, { gameMode: "2v2", matches: [], luckyPeople: [], usedPlayers: new Set() })}
+              className={`rounded-none ${gameStates[game].gameMode === "2v2" ? "bg-orange-500 text-white hover:bg-orange-600" : "hover:bg-orange-100 dark:hover:bg-orange-900/30"}`}
+            >
+              2v2
+            </Button>
+          </div>
+        )}
+      </div>
+      <Button
+        onClick={() => generatePairs()}
+        disabled={gameStates[game].isGenerating}
+        className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-sm sm:text-base"
+        aria-label={`Generate ${game} matches`}
+      >
+        <RefreshCcw className={`mr-2 h-5 w-5 ${gameStates[game].isGenerating ? "animate-spin" : ""}`} />
+        Generate {game.charAt(0).toUpperCase() + game.slice(1)} Matches
+      </Button>
+    </div>
+    {gameStates[game].matches.length > 0 && (
+      <div className="mt-6 flex justify-end">
+        <Button
+          onClick={downloadAsPDF}
+          className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-sm sm:text-base"
+          aria-label={`Download ${game} matches as PDF`}
+        >
+          <Download className="mr-2 h-5 w-5" /> Download PDF
+        </Button>
+      </div>
+    )}
+  </TabsContent>
+))}
+              </Tabs>
+
+              <GameMatches game={selectedGame} matches={gameStates[selectedGame]?.matches || []} />
+              <LuckyPeople luckyPeople={selectedGame === "general" ? generalLuckyPeople : gameStates[selectedGame].luckyPeople} />
+
+              <div className="mt-8 text-center">
+                <Button
+                  variant="outline"
+                  onClick={resetAll}
+                  className="border-orange-500 text-orange-500 hover:bg-orange-100 dark:border-orange-400 dark:text-orange-400 dark:hover:bg-orange-900/30"
+                  aria-label="Reset all matches"
+                >
+                  <RefreshCcw className="mr-2 h-5 w-5" /> Reset All
+                </Button>
               </div>
             </Card>
           </TabsContent>
         </Tabs>
 
         <div className="mt-12 text-center">
-          <p className="text-orange-700 dark:text-orange-300 font-medium">
-            Total Participants: {speakers.length} amazing people! 🌟
+          <p className="text-sm sm:text-base text-orange-700 dark:text-orange-300 font-medium">
+            Total Participants: {getParticipantCount()} amazing people! 🌟
           </p>
         </div>
       </div>
-    </div>
-  )
-}
 
+      {isCurrentGameGenerating && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <LoadingSpinner />
+        </div>
+      )}
+    </div>
+  );
+}
