@@ -73,6 +73,8 @@ export const speakers = [
     "Akhila Patibandla",
     "Lalam Padmavati",
     "Sadhik",
+    "Nikhil",
+    "Bhanu Sai"
   ];
   
   export const carromPlayers = [
@@ -150,4 +152,5 @@ export const speakers = [
     "Alamuri Yamini",
     "Bhanu",
     "Sadhik",
+    "Srinivas Sir",
   ];

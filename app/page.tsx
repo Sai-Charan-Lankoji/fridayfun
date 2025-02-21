@@ -166,7 +166,7 @@ export default function Home() {
         <div className="text-center mb-12">
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-orange-600 dark:text-orange-400 mb-4 flex items-center justify-center gap-2">
             <PartyPopper className="h-8 w-8 animate-bounce" />
-            Team Activities Manager
+            Team Assigning Manager
             <PartyPopper className="h-8 w-8 animate-bounce" />
           </h1>
         </div>
