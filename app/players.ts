@@ -113,6 +113,7 @@ export const speakers = [
     "Venkata Ramana Basetti",
     "Venkata Bhanu Sai Zagabathuni",
     "Alamuri Yamini",
+    "Srinivas Sir",
   ];
   
  export  const badmintonPlayers = [
@@ -152,5 +153,5 @@ export const speakers = [
     "Alamuri Yamini",
     "Bhanu",
     "Sadhik",
-    "Srinivas Sir",
+    
   ];
