@@ -99,84 +99,118 @@ export default function Home() {
   }, []);
 
   const downloadAsPDF = useCallback(() => {
-    const doc = new jsPDF();
-    doc.setFontSize(16);
-    doc.text(`${selectedGame.charAt(0).toUpperCase() + selectedGame.slice(1)} Matches`, 10, 10);
+  const doc = new jsPDF();
+  const pageHeight = doc.internal.pageSize.height; // A4 height in points (≈297mm)
+  const margin = 10; // Top/bottom margin
+  const lineHeight = 10; // Spacing between lines
+  let y = margin; // Starting y position
 
-    let y = 20;
-    if (selectedGame === "general") {
-      pairs.forEach((pair, index) => {
-        doc.text(`Group ${index + 1}:`, 10, y);
-        y += 10;
-        pair.forEach((person) => {
-          doc.text(`- ${person}`, 20, y);
-          y += 10;
-        });
-      });
-      if (generalLuckyPeople.length) {
-        y += 10;
-        doc.text("Lucky People (Next Round):", 10, y);
-        y += 10;
-        generalLuckyPeople.forEach((person) => {
-          doc.text(`- ${person}`, 20, y);
-          y += 10;
-        });
-      }
-    } else if (selectedGame === "cricket") {
-      gameStates[selectedGame].matches.forEach((match) => {
-        doc.text(`Team 1 XI:`, 10, y);
-        y += 10;
-        match.team1.forEach((player, index) => {
-          doc.text(`${index + 1}. ${player}`, 20, y);
-          y += 10;
-        });
-        doc.text(`Team 2 XI:`, 10, y);
-        y += 10;
-        match.team2.forEach((player, index) => {
-          doc.text(`${index + 1}. ${player}`, 20, y);
-          y += 10;
-        });
-      });
-      if (gameStates[selectedGame].luckyPeople.length) {
-        y += 10;
-        const midPoint = Math.ceil(gameStates[selectedGame].luckyPeople.length / 2);
-        const reservesTeam1 = gameStates[selectedGame].luckyPeople.slice(0, midPoint);
-        const reservesTeam2 = gameStates[selectedGame].luckyPeople.slice(midPoint);
-        doc.text("Reserved Players for Team 1:", 10, y);
-        y += 10;
-        reservesTeam1.forEach((player) => {
-          doc.text(`- ${player}`, 20, y);
-          y += 10;
-        });
-        doc.text("Reserved Players for Team 2:", 10, y);
-        y += 10;
-        reservesTeam2.forEach((player) => {
-          doc.text(`- ${player}`, 20, y);
-          y += 10;
-        });
-      }
-    } else {
-      gameStates[selectedGame].matches.forEach((match, index) => {
-        doc.text(`Match ${index + 1}:`, 10, y);
-        y += 10;
-        doc.text(`Team 1: ${match.team1.join(", ")}`, 20, y);
-        y += 10;
-        doc.text(`Team 2: ${match.team2.join(", ")}`, 20, y);
-        y += 10;
-      });
-      if (gameStates[selectedGame].luckyPeople.length) {
-        y += 10;
-        doc.text("Lucky People (Next Round):", 10, y);
-        y += 10;
-        gameStates[selectedGame].luckyPeople.forEach((person) => {
-          doc.text(`- ${person}`, 20, y);
-          y += 10;
-        });
-      }
+  // Helper function to check and add new page if needed
+  const checkPageLimit = (additionalHeight: number) => {
+    if (y + additionalHeight > pageHeight - margin) {
+      doc.addPage();
+      y = margin; // Reset y for new page
     }
+  };
 
-    doc.save(`${selectedGame}-matches.pdf`);
-  }, [selectedGame, pairs, generalLuckyPeople, gameStates]);
+  doc.setFontSize(16);
+  doc.text(`${selectedGame.charAt(0).toUpperCase() + selectedGame.slice(1)} Matches`, margin, y);
+  y += lineHeight * 2; // Extra space after title
+
+  if (selectedGame === "general") {
+    pairs.forEach((pair, index) => {
+      checkPageLimit(lineHeight * (pair.length + 2)); // Check space for group title + players
+      doc.setFontSize(12);
+      doc.text(`Group ${index + 1}:`, margin, y);
+      y += lineHeight;
+      pair.forEach((person) => {
+        doc.text(`- ${person}`, margin + 10, y);
+        y += lineHeight;
+      });
+    });
+    if (generalLuckyPeople.length) {
+      checkPageLimit(lineHeight * (generalLuckyPeople.length + 2));
+      doc.setFontSize(12);
+      y += lineHeight; // Space before section
+      doc.text("Lucky People (Next Round):", margin, y);
+      y += lineHeight;
+      generalLuckyPeople.forEach((person) => {
+        doc.text(`- ${person}`, margin + 10, y);
+        y += lineHeight;
+      });
+    }
+  } else if (selectedGame === "cricket") {
+    gameStates[selectedGame].matches.forEach((match) => {
+      // Team 1
+      checkPageLimit(lineHeight * (match.team1.length + 2));
+      doc.setFontSize(12);
+      doc.text(`Team 1 XI:`, margin, y);
+      y += lineHeight;
+      match.team1.forEach((player, index) => {
+        doc.text(`${index + 1}. ${player}`, margin + 10, y);
+        y += lineHeight;
+      });
+
+      // Team 2
+      checkPageLimit(lineHeight * (match.team2.length + 2));
+      y += lineHeight; // Space between teams
+      doc.text(`Team 2 XI:`, margin, y);
+      y += lineHeight;
+      match.team2.forEach((player, index) => {
+        doc.text(`${index + 1}. ${player}`, margin + 10, y);
+        y += lineHeight;
+      });
+    });
+    if (gameStates[selectedGame].luckyPeople.length) {
+      const midPoint = Math.ceil(gameStates[selectedGame].luckyPeople.length / 2);
+      const reservesTeam1 = gameStates[selectedGame].luckyPeople.slice(0, midPoint);
+      const reservesTeam2 = gameStates[selectedGame].luckyPeople.slice(midPoint);
+
+      // Reserves Team 1
+      checkPageLimit(lineHeight * (reservesTeam1.length + 2));
+      y += lineHeight; // Space before reserves
+      doc.text("Reserved Players for Team 1:", margin, y);
+      y += lineHeight;
+      reservesTeam1.forEach((player) => {
+        doc.text(`- ${player}`, margin + 10, y);
+        y += lineHeight;
+      });
+
+      // Reserves Team 2
+      checkPageLimit(lineHeight * (reservesTeam2.length + 2));
+      y += lineHeight; // Space between reserve sections
+      doc.text("Reserved Players for Team 2:", margin, y);
+      y += lineHeight;
+      reservesTeam2.forEach((player) => {
+        doc.text(`- ${player}`, margin + 10, y);
+        y += lineHeight;
+      });
+    }
+  } else {
+    gameStates[selectedGame].matches.forEach((match, index) => {
+      checkPageLimit(lineHeight * 4); // Match title + 2 teams + spacing
+      doc.setFontSize(12);
+      doc.text(`Match ${index + 1}:`, margin, y);
+      y += lineHeight;
+      doc.text(`Team 1: ${match.team1.join(", ")}`, margin + 10, y);
+      y += lineHeight;
+      doc.text(`Team 2: ${match.team2.join(", ")}`, margin + 10, y);
+      y += lineHeight * 2; // Extra space between matches
+    });
+    if (gameStates[selectedGame].luckyPeople.length) {
+      checkPageLimit(lineHeight * (gameStates[selectedGame].luckyPeople.length + 2));
+      doc.setFontSize(12);
+      doc.text("Lucky People (Next Round):", margin, y);
+      y += lineHeight;
+      gameStates[selectedGame].luckyPeople.forEach((person) => {
+        doc.text(`- ${person}`, margin + 10, y);
+        y += lineHeight;
+      });
+    }
+  }
+
+  doc.save(`${selectedGame}-matches.pdf`);
+}, [selectedGame, pairs, generalLuckyPeople, gameStates]);
 
   const getParticipantCount = () => {
     if (activeTab === "speaker") return speakers.length;
