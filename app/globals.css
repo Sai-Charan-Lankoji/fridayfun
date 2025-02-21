@@ -8,6 +8,36 @@
   --background-end-rgb: 255, 255, 255;
 }
 
+
+
+@keyframes roll-names {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(-100%);
+  }
+}
+
+.animate-roll-names {
+  animation: roll-names 1s linear infinite;
+}
+
+@keyframes slot-roll {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(-100%);
+  }
+}
+
+.animate-slot-roll {
+  animation: slot-roll 0.5s linear infinite;
+}
+
+
+
 @media (prefers-color-scheme: dark) {
   :root {
     --foreground-rgb: 255, 255, 255;

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Sparkles, Users, PartyPopper, RefreshCcw, UserPlus, Users2, Swords, Target, Gamepad2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from "sonner"
 import { speakers, chessPlayers, carromPlayers, badmintonPlayers } from "./players"
+import { motion, AnimatePresence } from "framer-motion"
 
 const excludedSpeakers = [""]
 const eligibleSpeakers = speakers.filter((speaker) => !excludedSpeakers.includes(speaker))
@@ -17,11 +18,14 @@ type GameMatch = {
   team2: string[]
 }
 
+type GameMode = "1v1" | "2v2"
+
 type GameState = {
   matches: GameMatch[]
   luckyPeople: string[]
   usedPlayers: Set<string>
   isGenerating: boolean
+  gameMode: GameMode
 }
 
 function shuffleArray(array: string[]) {
@@ -56,21 +60,23 @@ export default function Home() {
   const [generalUsedPlayers, setGeneralUsedPlayers] = useState<Set<string>>(new Set())
   const [selectedGame, setSelectedGame] = useState("general")
   const [isGeneralGenerating, setIsGeneralGenerating] = useState(false)
-  
-  // Separate state for each game type
+
   const [gameStates, setGameStates] = useState<Record<string, GameState>>({
-    chess: { matches: [], luckyPeople: [], usedPlayers: new Set(), isGenerating: false },
-    carrom: { matches: [], luckyPeople: [], usedPlayers: new Set(), isGenerating: false },
-    badminton: { matches: [], luckyPeople: [], usedPlayers: new Set(), isGenerating: false },
+    chess: { matches: [], luckyPeople: [], usedPlayers: new Set(), isGenerating: false, gameMode: "1v1" },
+    carrom: { matches: [], luckyPeople: [], usedPlayers: new Set(), isGenerating: false, gameMode: "2v2" },
+    badminton: { matches: [], luckyPeople: [], usedPlayers: new Set(), isGenerating: false, gameMode: "2v2" },
   })
 
+  const [isRolling, setIsRolling] = useState(false)
+  const [rollingNames, setRollingNames] = useState<string[]>([])
+
   const setGameState = (game: string, newState: Partial<GameState>) => {
-    setGameStates(prev => ({
+    setGameStates((prev) => ({
       ...prev,
       [game]: {
         ...prev[game],
-        ...newState
-      }
+        ...newState,
+      },
     }))
   }
 
@@ -79,10 +85,11 @@ export default function Home() {
     const used = new Set<string>()
     const players = [...availablePlayers]
 
-    const is2v2 = game === "carrom" || game === "badminton"
+    const gameMode = gameStates[game].gameMode
+    const playersPerMatch = gameMode === "2v2" ? 4 : 2
 
-    while (players.length >= (is2v2 ? 4 : 2)) {
-      if (is2v2) {
+    while (players.length >= playersPerMatch) {
+      if (gameMode === "2v2") {
         // Handle 2v2 matches
         const team1 = [players.shift(), players.shift()].filter(Boolean) as string[]
         const team2 = [players.shift(), players.shift()].filter(Boolean) as string[]
@@ -97,7 +104,7 @@ export default function Home() {
           break
         }
       } else {
-        // Handle 1v1 matches (chess)
+        // Handle 1v1 matches
         const player1 = players.shift()
         const player2 = players.shift()
 
@@ -161,16 +168,16 @@ export default function Home() {
         setIsGeneralGenerating(false)
       } else {
         const result = generateGameMatches(game, availablePlayers)
-        setGameState(game, { 
-          matches: result.matches, 
-          luckyPeople: result.luckyPeople, 
+        setGameState(game, {
+          matches: result.matches,
+          luckyPeople: result.luckyPeople,
           usedPlayers: result.usedPlayers,
-          isGenerating: false
+          isGenerating: false,
         })
       }
 
       const luckyCount = game === "general" ? generalLuckyPeople.length : gameStates[game].luckyPeople.length
-      
+
       toast.success(`🎮 ${game.charAt(0).toUpperCase() + game.slice(1)} matches generated!`, {
         description: luckyCount ? "Some players get a break this round! 🌟" : "Perfect matching achieved! ✨",
         style: {
@@ -206,12 +213,24 @@ export default function Home() {
           <GameIcon game={currentGame} />
           {currentGame.charAt(0).toUpperCase() + currentGame.slice(1)} Matches
         </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <motion.div
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+          initial="hidden"
+          animate="visible"
+          variants={{
+            visible: {
+              transition: { staggerChildren: 0.1 },
+            },
+          }}
+        >
           {matches.map((match, index) => (
-            <div
+            <motion.div
               key={index}
-              className="p-4 sm:p-6 bg-gradient-to-br from-orange-100 to-amber-50 dark:from-orange-900/50 dark:to-amber-900/30 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105 animate-fadeIn"
-              style={{ animationDelay: `${index * 100}ms` }}
+              variants={{
+                hidden: { opacity: 0, y: 20 },
+                visible: { opacity: 1, y: 0 },
+              }}
+              className="p-4 sm:p-6 bg-gradient-to-br from-orange-100 to-amber-50 dark:from-orange-900/50 dark:to-amber-900/30 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105"
             >
               <div className="space-y-4">
                 <div className="flex items-center justify-between text-orange-800 dark:text-orange-200">
@@ -236,50 +255,100 @@ export default function Home() {
                   </div>
                 </div>
               </div>
-            </div>
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
       </div>
     )
   }
 
   const renderLuckyPeople = () => {
-    const luckyPeople = selectedGame === "general" 
-      ? generalLuckyPeople 
-      : gameStates[selectedGame].luckyPeople;
-    
-    if (!luckyPeople.length) return null;
-    
+    const luckyPeople = selectedGame === "general" ? generalLuckyPeople : gameStates[selectedGame].luckyPeople
+
+    if (!luckyPeople.length) return null
+
     return (
       <div className="mt-8 animate-fadeIn">
         <h3 className="text-xl font-semibold text-orange-700 dark:text-orange-300 mb-4 flex items-center gap-2">
           <Sparkles className="w-6 h-6" />
           Lucky People (Next Round)
         </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <motion.div
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+          initial="hidden"
+          animate="visible"
+          variants={{
+            visible: {
+              transition: { staggerChildren: 0.05, delayChildren: 0.2 },
+            },
+          }}
+        >
           {luckyPeople.map((person, index) => (
-            <div
+            <motion.div
               key={index}
-              className="p-4 bg-gradient-to-r from-orange-200 to-amber-100 dark:from-orange-800/50 dark:to-amber-700/30 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105 animate-fadeIn"
-              style={{
-                animationDelay: `${index * 100}ms`,
+              variants={{
+                hidden: { opacity: 0, x: -20 },
+                visible: { opacity: 1, x: 0 },
               }}
+              className="p-4 bg-gradient-to-r from-orange-200 to-amber-100 dark:from-orange-800/50 dark:to-amber-700/30 rounded-lg shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105"
             >
               <div className="text-orange-600 dark:text-orange-300 font-medium">{person}</div>
-            </div>
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
       </div>
     )
   }
+
+  const LoadingSpinner = () => (
+    <motion.div
+      animate={{ rotate: 360 }}
+      transition={{ duration: 1, repeat: Number.POSITIVE_INFINITY, ease: "linear" }}
+      className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full"
+    />
+  )
+
+  const SlotMachine = ({ isSpinning, finalName }: { isSpinning: boolean; finalName: string }) => {
+    const [displayedName, setDisplayedName] = useState<string>("");
+  
+    useEffect(() => {
+      if (isSpinning) {
+        const interval = setInterval(() => {
+          const randomName = eligibleSpeakers[Math.floor(Math.random() * eligibleSpeakers.length)];
+          setDisplayedName(randomName);
+        }, 100); // Update every 100ms for smooth rolling
+  
+        return () => clearInterval(interval);
+      } else {
+        setDisplayedName(finalName); // Set final name when spinning stops
+      }
+    }, [isSpinning, finalName]);
+  
+    return (
+      <div className="relative h-20 w-full max-w-md mx-auto overflow-hidden rounded-lg bg-orange-100/20 dark:bg-orange-900/20 border border-orange-300 dark:border-orange-700">
+        <motion.div
+          className="absolute inset-0 flex items-center justify-center"
+          animate={isSpinning ? { y: [0, -20, 0] } : { y: 0 }}
+          transition={isSpinning ? { repeat: Infinity, duration: 0.3, ease: "linear" } : { duration: 0.5 }}
+        >
+          <div className="text-xl sm:text-2xl lg:text-3xl font-medium text-orange-600 dark:text-orange-300 text-center px-4">
+            {displayedName || "Spin to pick a speaker!"}
+          </div>
+        </motion.div>
+      </div>
+    );
+  };
+
+  
 
   const pickRandomSpeaker = () => {
     setIsSpinning(true)
     setSelectedSpeaker("")
 
+    // Roll for 2 seconds then show the winner
     setTimeout(() => {
-      const randomIndex = Math.floor(Math.random() * eligibleSpeakers.length)
-      setSelectedSpeaker(eligibleSpeakers[randomIndex])
+      const winner = eligibleSpeakers[Math.floor(Math.random() * eligibleSpeakers.length)]
+      setSelectedSpeaker(winner)
       setIsSpinning(false)
 
       toast.success("🎯 Speaker selected!", {
@@ -289,16 +358,28 @@ export default function Home() {
           color: "white",
         },
       })
-    }, 1500)
+    }, 2000)
   }
 
-  const isCurrentGameGenerating = selectedGame === "general" 
-    ? isGeneralGenerating 
-    : gameStates[selectedGame].isGenerating;
-  
+  const toggleGameMode = (game: string) => {
+    setGameStates((prev) => ({
+      ...prev,
+      [game]: {
+        ...prev[game],
+        gameMode: prev[game].gameMode === "1v1" ? "2v2" : "1v1",
+        matches: [], // Clear existing matches when mode changes
+        luckyPeople: [],
+        usedPlayers: new Set(),
+      },
+    }))
+  }
+
+  const isCurrentGameGenerating =
+    selectedGame === "general" ? isGeneralGenerating : gameStates[selectedGame].isGenerating
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 to-amber-100 dark:from-orange-950 dark:to-amber-900 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-7xl mx-auto py-8">
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 to-amber-100 dark:from-orange-950 dark:to-amber-900 px-4 sm:px-6 lg:px-8 overflow-hidden">
+      <div className="max-w-7xl mx-auto py-4 sm:py-6 lg:py-8">
         <div className="text-center mb-12">
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-orange-600 dark:text-orange-400 mb-4 flex items-center justify-center gap-2">
             <PartyPopper className="h-8 w-8 animate-bounce" />
@@ -311,14 +392,14 @@ export default function Home() {
           <TabsList className="w-full max-w-md mx-auto bg-orange-100 dark:bg-orange-900/30 p-1 rounded-xl overflow-x-auto flex-nowrap">
             <TabsTrigger
               value="speaker"
-              className="w-1/2 data-[state=active]:bg-orange-500 data-[state=active]:text-white dark:data-[state=active]:bg-orange-600 transition-all duration-300"
+              className="w-1/2 data-[state=active]:bg-orange-500 data-[state=active]:text-white dark:data-[state=active]:bg-orange-600 transition-all duration-300 hover:bg-orange-200 dark:hover:bg-orange-800/50"
             >
               <Users className="w-5 h-5 mr-2" />
               Friday Speaker
             </TabsTrigger>
             <TabsTrigger
               value="pairs"
-              className="w-1/2 data-[state=active]:bg-orange-500 data-[state=active]:text-white dark:data-[state=active]:bg-orange-600 transition-all duration-300"
+              className="w-1/2 data-[state=active]:bg-orange-500 data-[state=active]:text-white dark:data-[state=active]:bg-orange-600 transition-all duration-300 hover:bg-orange-200 dark:hover:bg-orange-800/50"
             >
               <Users2 className="w-5 h-5 mr-2" />
               Game Matches
@@ -333,12 +414,20 @@ export default function Home() {
                   Today's Lucky Speaker
                 </h2>
               </div>
-              <div
-                className={`min-h-[120px] flex items-center justify-center text-2xl font-medium text-orange-600 dark:text-orange-300 ${
-                  isSpinning ? "animate-pulse scale-105 transition-transform" : ""
-                }`}
-              >
-                {selectedSpeaker || "Click the button to pick a speaker!"}
+              <div className="min-h-[120px] flex items-center justify-center">
+                <AnimatePresence mode="wait">
+                  {selectedSpeaker ? (
+                    <SlotMachine isSpinning={isSpinning} finalName={selectedSpeaker} />
+                  ) : (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="text-2xl font-medium text-orange-600/60 dark:text-orange-300/60"
+                    >
+                      Click the button to pick a speaker!
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             </Card>
 
@@ -347,10 +436,16 @@ export default function Home() {
                 size="lg"
                 onClick={pickRandomSpeaker}
                 disabled={isSpinning}
-                className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-semibold py-8 px-12 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 text-lg"
+                className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-semibold py-8 px-12 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 text-lg disabled:opacity-70"
               >
-                <RefreshCcw className={`mr-3 h-6 w-6 ${isSpinning ? "animate-spin" : ""}`} />
-                Pick Today's Speaker!
+                {isSpinning ? (
+                  <LoadingSpinner />
+                ) : (
+                  <>
+                    <RefreshCcw className="mr-3 h-6 w-6" />
+                    Pick Today's Speaker!
+                  </>
+                )}
               </Button>
             </div>
           </TabsContent>
@@ -407,7 +502,22 @@ export default function Home() {
                           type="number"
                           min="2"
                           value={pairSize}
-                          onChange={(e) => setPairSize(Math.max(2, Number.parseInt(e.target.value) || 2))}
+                          onChange={(e) => {
+                            const value = e.target.value
+                            if (value === "") {
+                              setPairSize(2)
+                            } else {
+                              const num = Number.parseInt(value)
+                              if (!isNaN(num)) {
+                                setPairSize(Math.max(2, num))
+                              }
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Backspace") {
+                              setPairSize(2)
+                            }
+                          }}
                           className="border-orange-200 dark:border-orange-800"
                         />
                       </div>
@@ -422,20 +532,66 @@ export default function Home() {
                     </div>
                   </TabsContent>
 
-                  {["chess", "carrom", "badminton"].map((game) => (
+                  {["carrom", "badminton"].map((game) => (
                     <TabsContent key={game} value={game} className="mt-6">
-                      <div className="flex justify-end">
+                      <div className="flex flex-col sm:flex-row justify-between gap-4 items-center">
+                        <div className="flex items-center gap-4">
+                          <span className="text-sm font-medium text-orange-700 dark:text-orange-300">Game Mode:</span>
+                          <div className="flex rounded-lg overflow-hidden border border-orange-200 dark:border-orange-800">
+                            <Button
+                              variant={gameStates[game].gameMode === "1v1" ? "default" : "ghost"}
+                              size="sm"
+                              onClick={() => setGameState(game, { gameMode: "1v1", matches: [] })}
+                              className={`rounded-none ${
+                                gameStates[game].gameMode === "1v1"
+                                  ? "bg-orange-500 text-white hover:bg-orange-600"
+                                  : "hover:bg-orange-100 dark:hover:bg-orange-900/30"
+                              }`}
+                            >
+                              1v1
+                            </Button>
+                            <Button
+                              variant={gameStates[game].gameMode === "2v2" ? "default" : "ghost"}
+                              size="sm"
+                              onClick={() => setGameState(game, { gameMode: "2v2", matches: [] })}
+                              className={`rounded-none ${
+                                gameStates[game].gameMode === "2v2"
+                                  ? "bg-orange-500 text-white hover:bg-orange-600"
+                                  : "hover:bg-orange-100 dark:hover:bg-orange-900/30"
+                              }`}
+                            >
+                              2v2
+                            </Button>
+                          </div>
+                        </div>
                         <Button
                           onClick={() => generatePairs(game)}
                           disabled={gameStates[game].isGenerating}
                           className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600"
                         >
-                          <RefreshCcw className={`mr-2 h-5 w-5 ${gameStates[game].isGenerating ? "animate-spin" : ""}`} />
+                          <RefreshCcw
+                            className={`mr-2 h-5 w-5 ${gameStates[game].isGenerating ? "animate-spin" : ""}`}
+                          />
                           Generate {game.charAt(0).toUpperCase() + game.slice(1)} Matches
                         </Button>
                       </div>
                     </TabsContent>
                   ))}
+
+                  <TabsContent key="chess" value="chess" className="mt-6">
+                    <div className="flex justify-end">
+                      <Button
+                        onClick={() => generatePairs("chess")}
+                        disabled={gameStates["chess"].isGenerating}
+                        className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600"
+                      >
+                        <RefreshCcw
+                          className={`mr-2 h-5 w-5 ${gameStates["chess"].isGenerating ? "animate-spin" : ""}`}
+                        />
+                        Generate Chess Matches
+                      </Button>
+                    </div>
+                  </TabsContent>
                 </Tabs>
 
                 {selectedGame === "general" && pairs.length > 0 && (
@@ -489,3 +645,4 @@ export default function Home() {
     </div>
   )
 }
+
