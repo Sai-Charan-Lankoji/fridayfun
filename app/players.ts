@@ -155,3 +155,40 @@ export const speakers = [
     "Sadhik",
     
   ];
+
+  export const SpAllrounder = [
+"Srinivas Sir",
+"Bala sambasiva rao n",
+"Bhanu kiran",
+"Vamsee krishna nune",
+"Samson kaleti",
+"Durga prasad",]
+
+export const CommonPlayers =[
+"Azad shaik",
+"Ranjith kumar manne",
+"Pitta sai krishna",
+"Sai ram bhogadi",
+"sai karthik thotakura",
+"Hema satya narayana marella",
+"Gopi puppala",
+"Indra shekar reddy",
+]
+export const FemalePlayers = [
+  "Yaamini",
+  "Keerthi priya chodavarpu",
+  "Sowmya sri gudivada",
+  "sowmya sri parchuri",
+  "Hima madhuri undi",
+  "Ramya sri marella",
+  "Ramya yarlagadda",
+  "Manswi ponna",]
+
+
+  export const ExtraPlayers = [
+    "Vamsi raj chebrolu",
+    "ketan sri venkata sai annam",
+    "venkata ramana basetti",
+    "Mani Kanta Reddy",
+    "Bhanu sai",
+    "Sateesh kumar mogalipuvvu",]

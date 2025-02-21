@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { toast } from "sonner";
 import { shuffleArray } from "../lib/utils";
-import { speakers, chessPlayers, carromPlayers, badmintonPlayers } from "../app/players";
+import { speakers, chessPlayers, carromPlayers, badmintonPlayers, SpAllrounder, CommonPlayers, FemalePlayers, ExtraPlayers } from "../app/players";
 
 type GameMatch = { team1: string[]; team2: string[] };
 type GameMode = "1v1" | "2v2";
@@ -27,6 +27,9 @@ export const useGameGenerator = (
       case "carrom":
       case "badminton":
         return shuffleArray(game === "carrom" ? [...carromPlayers] : [...badmintonPlayers]);
+      case "cricket":
+        // For cricket, we'll handle team composition separately
+        return [];
       default:
         return shuffleArray([...eligibleSpeakers]);
     }
@@ -64,6 +67,42 @@ export const useGameGenerator = (
     return { matches, luckyPeople: players, usedPlayers: used };
   }, [gameStates]);
 
+  const generateCricketTeams = useCallback(() => {
+    const matches: GameMatch[] = [];
+    const used = new Set<string>();
+    
+    // Shuffle all arrays
+    const shuffledFemale = shuffleArray([...FemalePlayers]); // 8 total, 4 per team
+    const shuffledAllrounders = shuffleArray([...SpAllrounder]); // 6 total, 3 per team
+    const shuffledCommon = shuffleArray([...CommonPlayers]); // 8 total, 4 per team
+    const shuffledExtras = shuffleArray([...ExtraPlayers]); // Split randomly
+
+    // Team 1: 4 Female, 3 Allrounders, 4 Common = 11
+    const team1 = [
+      ...shuffledFemale.slice(0, 4), // First 4 females
+      ...shuffledAllrounders.slice(0, 3), // First 3 allrounders
+      ...shuffledCommon.slice(0, 4), // First 4 common
+    ];
+    
+    // Team 2: 4 Female, 3 Allrounders, 4 Common = 11
+    const team2 = [
+      ...shuffledFemale.slice(4, 8), // Last 4 females
+      ...shuffledAllrounders.slice(3, 6), // Last 3 allrounders
+      ...shuffledCommon.slice(4, 8), // Last 4 common
+    ];
+
+    matches.push({ team1, team2 });
+    team1.forEach((p) => used.add(p));
+    team2.forEach((p) => used.add(p));
+
+    // Split extra players into reserves
+    const midPoint = Math.ceil(shuffledExtras.length / 2);
+    const reservesTeam1 = shuffledExtras.slice(0, midPoint);
+    const reservesTeam2 = shuffledExtras.slice(midPoint);
+
+    return { matches, luckyPeople: [...reservesTeam1, ...reservesTeam2], usedPlayers: used };
+  }, []);
+
   const generatePairs = useCallback(() => {
     if (!pairSize && game === "general") {
       toast.error("Please set a valid group size!");
@@ -74,8 +113,8 @@ export const useGameGenerator = (
     else setGameState(game, { isGenerating: true });
 
     setTimeout(() => {
-      const availablePlayers = getPlayersForGame(game);
-      if (availablePlayers.length === 0) {
+      let availablePlayers = getPlayersForGame(game);
+      if (availablePlayers.length === 0 && game !== "cricket") {
         toast.error("No players available for this game!");
         return;
       }
@@ -106,7 +145,7 @@ export const useGameGenerator = (
           }
         }
 
-        newPairs = newPairs; // Assign to outer scope
+        newPairs = newPairs;
         luckyPeople = remaining;
         usedPlayers = used;
 
@@ -114,9 +153,21 @@ export const useGameGenerator = (
         setGeneralLuckyPeople(remaining);
         setGeneralUsedPlayers(used);
         setIsGeneralGenerating(false);
+      } else if (game === "cricket") {
+        const result = generateCricketTeams();
+        newPairs = result.matches.map((m) => [...m.team1, ...m.team2]); // For PDF purposes
+        luckyPeople = result.luckyPeople; // Reserves
+        usedPlayers = result.usedPlayers;
+
+        setGameState(game, {
+          matches: result.matches,
+          luckyPeople: result.luckyPeople,
+          usedPlayers: result.usedPlayers,
+          isGenerating: false,
+        });
       } else {
         const result = generateGameMatches(game, availablePlayers);
-        newPairs = result.matches.map((m) => [...m.team1, ...m.team2]); // For PDF purposes
+        newPairs = result.matches.map((m) => [...m.team1, ...m.team2]);
         luckyPeople = result.luckyPeople;
         usedPlayers = result.usedPlayers;
 
@@ -130,11 +181,11 @@ export const useGameGenerator = (
 
       const luckyCount = game === "general" ? luckyPeople.length : gameStates[game].luckyPeople.length;
       toast.success(`🎮 ${game.charAt(0).toUpperCase() + game.slice(1)} matches generated!`, {
-        description: luckyCount ? "Some players get a break this round! 🌟" : "Perfect matching achieved! ✨",
+        description: luckyCount ? "Some players are reserved this round! 🌟" : "Perfect matching achieved! ✨",
         style: { background: "linear-gradient(to right, #ff8a00, #ff5f00)", color: "white" },
       });
 
-      return { newPairs, luckyPeople }; // Return for PDF generation
+      return { newPairs, luckyPeople };
     }, 1000);
   }, [
     game,
@@ -147,6 +198,7 @@ export const useGameGenerator = (
     setIsGeneralGenerating,
     getPlayersForGame,
     generateGameMatches,
+    generateCricketTeams,
   ]);
 
   return { generatePairs };

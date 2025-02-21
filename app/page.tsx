@@ -8,14 +8,15 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { jsPDF } from "jspdf";
-import { speakers,chessPlayers, carromPlayers, badmintonPlayers } from "./players";
+import { speakers, chessPlayers, carromPlayers, badmintonPlayers, SpAllrounder, CommonPlayers, FemalePlayers, ExtraPlayers } from "./players";
 import { SlotMachine } from "../components/SlotMachine";
 import { GameMatches } from "../components/GameMatches";
 import { LuckyPeople } from "../components/LuckyPeople";
 import { LoadingSpinner } from "../components/LoadingSpinner";
+import { CricketMatch } from "../components/CricketMatch"; 
 import { useGameGenerator } from "../hooks/useGameGenerator";
 
-const excludedSpeakers = ["SAICHARAN LANKOJI","B Rama Rao","M SADIKH SHARIEFF","Lakshmi Sowmya Parchuri","SAMSON KALETI"];
+const excludedSpeakers = [""];
 const initialEligibleSpeakers = speakers.filter((speaker) => !excludedSpeakers.includes(speaker));
 
 type GameMatch = { team1: string[]; team2: string[] };
@@ -23,7 +24,6 @@ type GameMode = "1v1" | "2v2";
 type GameState = { matches: GameMatch[]; luckyPeople: string[]; usedPlayers: Set<string>; isGenerating: boolean; gameMode: GameMode };
 
 export default function Home() {
-  
   const [selectedSpeaker, setSelectedSpeaker] = useState("");
   const [isSpinning, setIsSpinning] = useState(false);
   const [pickedSpeakers, setPickedSpeakers] = useState<string[]>([]);
@@ -40,6 +40,7 @@ export default function Home() {
     chess: { matches: [], luckyPeople: [], usedPlayers: new Set(), isGenerating: false, gameMode: "1v1" },
     carrom: { matches: [], luckyPeople: [], usedPlayers: new Set(), isGenerating: false, gameMode: "2v2" },
     badminton: { matches: [], luckyPeople: [], usedPlayers: new Set(), isGenerating: false, gameMode: "2v2" },
+    cricket: { matches: [], luckyPeople: [], usedPlayers: new Set(), isGenerating: false, gameMode: "1v1" },
   });
 
   const setGameState = useCallback((game: string, newState: Partial<GameState>) => {
@@ -81,7 +82,7 @@ export default function Home() {
   const removePickedSpeaker = useCallback((speaker: string) => {
     setPickedSpeakers((prev) => prev.filter((s) => s !== speaker));
     setEligibleSpeakers((prev) => [...prev, speaker]);
-    toast.success(`${speaker} is back in the pool!`,  {style: { background: "linear-gradient(to right, #ff8a00, #ff5f00)", color: "white" }});
+    toast.success(`${speaker} is back in the pool!`);
   }, []);
 
   const resetAll = useCallback(() => {
@@ -92,8 +93,9 @@ export default function Home() {
       chess: { matches: [], luckyPeople: [], usedPlayers: new Set(), isGenerating: false, gameMode: "1v1" },
       carrom: { matches: [], luckyPeople: [], usedPlayers: new Set(), isGenerating: false, gameMode: "2v2" },
       badminton: { matches: [], luckyPeople: [], usedPlayers: new Set(), isGenerating: false, gameMode: "2v2" },
+      cricket: { matches: [], luckyPeople: [], usedPlayers: new Set(), isGenerating: false, gameMode: "1v1" },
     });
-    toast.success("All matches reset!", {style: { background: "linear-gradient(to right, #ff8a00, #ff5f00)", color: "white" }});
+    toast.success("All matches reset!");
   }, []);
 
   const downloadAsPDF = useCallback(() => {
@@ -117,6 +119,39 @@ export default function Home() {
         y += 10;
         generalLuckyPeople.forEach((person) => {
           doc.text(`- ${person}`, 20, y);
+          y += 10;
+        });
+      }
+    } else if (selectedGame === "cricket") {
+      gameStates[selectedGame].matches.forEach((match) => {
+        doc.text(`Team 1 XI:`, 10, y);
+        y += 10;
+        match.team1.forEach((player, index) => {
+          doc.text(`${index + 1}. ${player}`, 20, y);
+          y += 10;
+        });
+        doc.text(`Team 2 XI:`, 10, y);
+        y += 10;
+        match.team2.forEach((player, index) => {
+          doc.text(`${index + 1}. ${player}`, 20, y);
+          y += 10;
+        });
+      });
+      if (gameStates[selectedGame].luckyPeople.length) {
+        y += 10;
+        const midPoint = Math.ceil(gameStates[selectedGame].luckyPeople.length / 2);
+        const reservesTeam1 = gameStates[selectedGame].luckyPeople.slice(0, midPoint);
+        const reservesTeam2 = gameStates[selectedGame].luckyPeople.slice(midPoint);
+        doc.text("Reserved Players for Team 1:", 10, y);
+        y += 10;
+        reservesTeam1.forEach((player) => {
+          doc.text(`- ${player}`, 20, y);
+          y += 10;
+        });
+        doc.text("Reserved Players for Team 2:", 10, y);
+        y += 10;
+        reservesTeam2.forEach((player) => {
+          doc.text(`- ${player}`, 20, y);
           y += 10;
         });
       }
@@ -152,6 +187,8 @@ export default function Home() {
         return carromPlayers.length;
       case "badminton":
         return badmintonPlayers.length;
+      case "cricket":
+        return SpAllrounder.length + CommonPlayers.length + FemalePlayers.length + ExtraPlayers.length;
       case "general":
       default:
         return speakers.length;
@@ -166,18 +203,18 @@ export default function Home() {
         <div className="text-center mb-12">
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-orange-600 dark:text-orange-400 mb-4 flex items-center justify-center gap-2">
             <PartyPopper className="h-8 w-8 animate-bounce" />
-            Team Assigning Manager
+            Team Activities Manager
             <PartyPopper className="h-8 w-8 animate-bounce" />
           </h1>
         </div>
 
         <Tabs defaultValue="speaker" onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="w-full max-w-md mx-auto bg-orange-100 dark:bg-orange-900/30 p-1 rounded-xl overflow-x-auto flex-nowrap">
-            <TabsTrigger value="speaker" className="w-1/2 data-[state=active]:bg-orange-500 data-[state=active]:text-white">
+            <TabsTrigger value="speaker" className="w-full sm:w-1/2 data-[state=active]:bg-orange-500 data-[state=active]:text-white">
               <Users className="w-5 h-5 mr-2" />
               Friday Speaker
             </TabsTrigger>
-            <TabsTrigger value="pairs" className="w-1/2 data-[state=active]:bg-orange-500 data-[state=active]:text-white">
+            <TabsTrigger value="pairs" className="w-full sm:w-1/2 data-[state=active]:bg-orange-500 data-[state=active]:text-white">
               <UserPlus className="w-5 h-5 mr-2" />
               Game Matches
             </TabsTrigger>
@@ -242,7 +279,7 @@ export default function Home() {
               </div>
 
               <Tabs value={selectedGame} onValueChange={setSelectedGame} className="w-full">
-                <TabsList className="w-full bg-orange-100/50 dark:bg-orange-900/20 p-1 rounded-lg grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <TabsList className="w-full bg-orange-100/50 dark:bg-orange-900/20 p-1 rounded-lg grid grid-cols-2 sm:grid-cols-5 gap-2">
                   <TabsTrigger value="general" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white">
                     <UserPlus className="w-4 h-4 mr-2" /> General
                   </TabsTrigger>
@@ -254,6 +291,9 @@ export default function Home() {
                   </TabsTrigger>
                   <TabsTrigger value="badminton" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white">
                     <RefreshCcw className="w-4 h-4 mr-2" /> Badminton
+                  </TabsTrigger>
+                  <TabsTrigger value="cricket" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white">
+                    <RefreshCcw className="w-4 h-4 mr-2" /> Cricket
                   </TabsTrigger>
                 </TabsList>
 
@@ -324,68 +364,83 @@ export default function Home() {
                   )}
                 </TabsContent>
 
-                {["chess", "carrom", "badminton"].map((game) => (
-  <TabsContent key={game} value={game} className="mt-6">
-    <div className="flex flex-col sm:flex-row justify-between gap-4 items-center">
-      <div className="flex items-center gap-4">
-        <span className="text-sm sm:text-base font-medium text-orange-700 dark:text-orange-300">Game Mode:</span>
-        <div className="flex rounded-lg overflow-hidden border border-orange-200 dark:border-orange-800">
-          <Button
-            variant={gameStates[game].gameMode === "1v1" ? "default" : "ghost"}
-            size="sm"
-            onClick={() => setGameState(game, { gameMode: "1v1", matches: [], luckyPeople: [], usedPlayers: new Set() })}
-            className={`rounded-none ${gameStates[game].gameMode === "1v1" ? "bg-orange-500 text-white hover:bg-orange-600" : "hover:bg-orange-100 dark:hover:bg-orange-900/30"}`}
-          >
-            1v1
-          </Button>
-          <Button
-            variant={gameStates[game].gameMode === "2v2" ? "default" : "ghost"}
-            size="sm"
-            onClick={() => {
-              if (game === "chess") {
-                toast.error("Chess is a 1v1 game!", {
-                  style: { background: "linear-gradient(to right, #ff8a00, #ff5f00)", color: "white" },
-                });
-              } else {
-                setGameState(game, { gameMode: "2v2", matches: [], luckyPeople: [], usedPlayers: new Set() });
-              }
-            }}
-            className={`rounded-none ${
-              gameStates[game].gameMode === "2v2"
-                ? "bg-orange-500 text-white hover:bg-orange-600"
-                : "hover:bg-orange-100 dark:hover:bg-orange-900/30"
-            } ${game === "chess" ? "opacity-50 cursor-not-allowed" : ""}`}
-          >
-            2v2
-          </Button>
-        </div>
-      </div>
-      <Button
-        onClick={() => generatePairs()}
-        disabled={gameStates[game].isGenerating}
-        className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-sm sm:text-base"
-        aria-label={`Generate ${game} matches`}
-      >
-        <RefreshCcw className={`mr-2 h-5 w-5 ${gameStates[game].isGenerating ? "animate-spin" : ""}`} />
-        Generate {game.charAt(0).toUpperCase() + game.slice(1)} Matches
-      </Button>
-    </div>
-    {gameStates[game].matches.length > 0 && (
-      <div className="mt-6 flex justify-end">
-        <Button
-          onClick={downloadAsPDF}
-          className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-sm sm:text-base"
-          aria-label={`Download ${game} matches as PDF`}
-        >
-          <Download className="mr-2 h-5 w-5" /> Download PDF
-        </Button>
-      </div>
-    )}
-  </TabsContent>
-))}     </Tabs>
+                {["chess", "carrom", "badminton", "cricket"].map((game) => (
+                  <TabsContent key={game} value={game} className="mt-6">
+                    <div className="flex flex-col sm:flex-row justify-between gap-4 items-center">
+                      {game !== "cricket" && (
+                        <div className="flex items-center gap-4">
+                          <span className="text-sm sm:text-base font-medium text-orange-700 dark:text-orange-300">Game Mode:</span>
+                          <div className="flex rounded-lg overflow-hidden border border-orange-200 dark:border-orange-800">
+                            <Button
+                              variant={gameStates[game].gameMode === "1v1" ? "default" : "ghost"}
+                              size="sm"
+                              onClick={() => setGameState(game, { gameMode: "1v1", matches: [], luckyPeople: [], usedPlayers: new Set() })}
+                              className={`rounded-none ${gameStates[game].gameMode === "1v1" ? "bg-orange-500 text-white hover:bg-orange-600" : "hover:bg-orange-100 dark:hover:bg-orange-900/30"}`}
+                            >
+                              1v1
+                            </Button>
+                            <Button
+                              variant={gameStates[game].gameMode === "2v2" ? "default" : "ghost"}
+                              size="sm"
+                              onClick={() => {
+                                if (game === "chess") {
+                                  toast.error("Chess is a 1v1 game!", {
+                                    style: { background: "linear-gradient(to right, #ff8a00, #ff5f00)", color: "white" },
+                                  });
+                                } else {
+                                  setGameState(game, { gameMode: "2v2", matches: [], luckyPeople: [], usedPlayers: new Set() });
+                                }
+                              }}
+                              className={`rounded-none ${
+                                gameStates[game].gameMode === "2v2"
+                                  ? "bg-orange-500 text-white hover:bg-orange-600"
+                                  : "hover:bg-orange-100 dark:hover:bg-orange-900/30"
+                              } ${game === "chess" ? "opacity-50 cursor-not-allowed" : ""}`}
+                            >
+                              2v2
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                      {game === "cricket" && (
+                        <div className="flex items-center gap-4">
+                          <span className="text-sm sm:text-base font-medium text-orange-700 dark:text-orange-300">Team Size:</span>
+                          <span className="text-sm sm:text-base text-orange-600 dark:text-orange-300">11 vs 11</span>
+                        </div>
+                      )}
+                      <Button
+                        onClick={() => generatePairs()}
+                        disabled={gameStates[game].isGenerating}
+                        className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-sm sm:text-base"
+                        aria-label={`Generate ${game} matches`}
+                      >
+                        <RefreshCcw className={`mr-2 h-5 w-5 ${gameStates[game].isGenerating ? "animate-spin" : ""}`} />
+                        Generate {game.charAt(0).toUpperCase() + game.slice(1)} Matches
+                      </Button>
+                    </div>
+                    {gameStates[game].matches.length > 0 && (
+                      <div className="mt-6 flex justify-end">
+                        <Button
+                          onClick={downloadAsPDF}
+                          className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-sm sm:text-base"
+                          aria-label={`Download ${game} matches as PDF`}
+                        >
+                          <Download className="mr-2 h-5 w-5" /> Download PDF
+                        </Button>
+                      </div>
+                    )}
+                  </TabsContent>
+                ))}
+              </Tabs>
 
-              <GameMatches game={selectedGame} matches={gameStates[selectedGame]?.matches || []} />
-              <LuckyPeople luckyPeople={selectedGame === "general" ? generalLuckyPeople : gameStates[selectedGame].luckyPeople} />
+              {selectedGame === "cricket" && gameStates["cricket"].matches.length > 0 ? (
+                <CricketMatch match={gameStates["cricket"].matches[0]} reserves={gameStates["cricket"].luckyPeople} />
+              ) : (
+                <>
+                  <GameMatches game={selectedGame} matches={gameStates[selectedGame]?.matches || []} />
+                  <LuckyPeople luckyPeople={selectedGame === "general" ? generalLuckyPeople : gameStates[selectedGame].luckyPeople} />
+                </>
+              )}
 
               <div className="mt-8 text-center">
                 <Button
